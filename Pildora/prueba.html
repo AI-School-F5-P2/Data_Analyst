@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Airbnb Madrid con D3.js</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        /* Estilos generales */
+        body {
+            font-family: 'Arial', sans-serif;
+            padding: 40px;
+            background-color: #FFFFFF;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1, h2 {
+            color: #484848;
+        }
+
+        h2 {
+            border-bottom: 2px solid #FF5A5F;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Estilos para los gráficos */
+        .bar {
+            fill: #00A699;
+        }
+
+        .bar:hover {
+            fill: #484848;
+        }
+
+        .axis-label {
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #484848;
+        }
+
+        svg {
+            background-color: #FFFFFF;
+            border: 1px solid #EAEAEA;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            font-size: 0.9em;
+            color: #FFFFFF;
+            background-color: #767676;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.05);
+            z-index: 1000;
+        }
+
+        /* Estilos específicos para los nuevos gráficos D3.js */
+        .chart-container {
+            text-align: center;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Análisis de comportamiento de Airbnb en Madrid</h1>
+
+    <div class="chart-container">
+        <h2>Distribución de Precios</h2>
+        <svg id="histogram" width="600" height="400" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <!-- Nuevos gráficos D3.js -->
+    <div class="chart-container">
+        <h2>Distribución de Tipos de Habitación (D3.js)</h2>
+        <svg id="room-type-chart" width="600" height="400" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <div class="chart-container">
+        <h2>Distribución de Grupos de Vecindarios (D3.js)</h2>
+        <svg id="neighbourhood-group-chart" width="600" height="400" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <div class="chart-container">
+        <h2>Distribución de Precios (D3.js)</h2>
+        <svg id="price-distribution-chart" width="600" height="400" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <!-- Script para los gráficos D3.js -->
+    <script>
+        // Cargar los datos
+        d3.csv("../csv/madrid_airbnb.csv").then(data => {
+
+            // 1. Histograma de precios
+            const histogramSVG = d3.select('#histogram');
+            const histogramWidth = 600;
+            const histogramHeight = 400;
+            const histogramData = d3.bin().domain([0, 500]).thresholds(50)(data.map(d => +d.price));
+            const xScaleHistogram = d3.scaleLinear().domain([0, 400]).range([0, histogramWidth - 100]);
+            const yScaleHistogram = d3.scaleLinear().domain([0, d3.max(histogramData, d => d.length)]).range([histogramHeight - 40, 0]);
+
+            const tooltipHistogram = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0)
+                .style("position", "absolute")
+                .style("padding", "8px")
+                .style("border-radius", "5px")
+                .style("box-shadow", "0px 0px 5px rgba(0, 0, 0, 0.2)")
+                .style("pointer-events", "none");
+
+            const bars = histogramSVG.selectAll('rect')
+                .data(histogramData)
+                .enter().append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => xScaleHistogram(d.x0) + 50)
+                .attr('y', d => yScaleHistogram(d.length))
+                .attr('width', d => xScaleHistogram(d.x1) - xScaleHistogram(d.x0) - 1)
+                .attr('height', d => histogramHeight - 40 - yScaleHistogram(d.length))
+                .attr('fill', 'skyblue');
+
+            bars.on("mouseover", function(event, d) {
+                    d3.select(this).attr('fill', '#484848')
+                        .attr('x', d => xScaleHistogram(d.x0) + 50)
+                        .attr('width', d => xScaleHistogram(d.x1) - xScaleHistogram(d.x0) - 1);
+
+                    // Agregar el signo de pesos en la parte superior de la barra
+                    histogramSVG.append('text')
+                        .attr('class', 'dollar-sign')
+                        .attr('x', xScaleHistogram(d.x0) + 50 + (xScaleHistogram(d.x1) - xScaleHistogram(d.x0)) / 2)
+                        .attr('y', yScaleHistogram(d.length) - 5)
+                        .style('text-anchor', 'middle')
+                        .text('$');
+
+                    // Historia basada en el rango de precios
+                    let story = "";
+                    if (d.x0 <= 50) story = "¡Qué ganga! Estás viendo los lugares más económicos.";
+                    else if (d.x0 <= 150) story = "Estás viendo lugares asequibles.";
+                    else if (d.x0 <= 250) story = "Estás viendo lugares moderadamente preciosos.";
+                    else if (d.x0 <= 350) story = "Estás viendo lugares caros.";
+                    else story = "¡Vas con todo en esta selección de lujo!";
+                    tooltipHistogram.transition()
+                        .duration(200)
+                        .style("opacity", 0.9);
+                    tooltipHistogram.html(`${d.length} alojamientos<br>${story}`)
+                        .style("left", (event.pageX) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function() {
+                    d3.select(this).attr('fill', 'skyblue')
+                        .attr('x', d => xScaleHistogram(d.x0) + 50)
+                        .attr('width', d => xScaleHistogram(d.x1) - xScaleHistogram(d.x0) - 1);
+                    histogramSVG.selectAll(".dollar-sign").remove();
+                    tooltipHistogram.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                });
+
+            histogramSVG.append('g')
+                .attr('transform', `translate(50,${histogramHeight - 40})`)
+                .call(d3.axisBottom(xScaleHistogram).ticks(10).tickFormat(d3.format(".0f")));
+
+            histogramSVG.append('text')
+                .attr('class', 'axis-label')
+                .attr('x', histogramWidth / 2)
+                .attr('y', histogramHeight)
+                .attr('dy', 35)
+                .style('text-anchor', 'middle')
+                .text('Precio por noche (en USD)');
+
+            histogramSVG.append('g')
+                .attr('transform', 'translate(50,0)')
+                .call(d3.axisLeft(yScaleHistogram).ticks(5).tickFormat(d3.format(".0f")));
+
+            // 2. Gráfico de tipos de habitación
+            const roomTypeChartSVG = d3.select('#room-type-chart');
+            const roomTypeData = d3.rollups(data, v => v.length, d => d.room_type);
+
+            const roomTypePie = d3.pie()
+                .value(d => d[1]);
+
+            const roomTypeArc = d3.arc()
+                .innerRadius(0)
+                .outerRadius(Math.min(histogramWidth, histogramHeight) / 2 - 10);
+
+            const roomTypeColor = d3.scaleOrdinal()
+                .domain(roomTypeData.map(d => d[0]))
+                .range(d3.schemeCategory10);
+
+            const roomTypeTooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0)
+                .style("position", "absolute")
+                .style("padding", "8px")
+                .style("border-radius", "5px")
+                .style("box-shadow", "0px 0px 5px rgba(0, 0, 0, 0.2)")
+                .style("pointer-events", "none");
+
+            const roomTypePieChart = roomTypeChartSVG.append("g")
+                .attr("transform", `translate(${histogramWidth / 2},${histogramHeight / 2})`);
+
+            const roomTypeArcs = roomTypePieChart.selectAll(".arc")
+                .data(roomTypePie(roomTypeData))
+                .enter().append("g")
+                .attr("class", "arc");
+
+            roomTypeArcs.append("path")
+                .attr("d", roomTypeArc)
+                .attr("fill", d => roomTypeColor(d.data[0]))
+                .on("mouseover", function(event, d) {
+                    d3.select(this).transition()
+                        .duration(200)
+                        .attr("d", d3.arc()
+                            .innerRadius(0)
+                            .outerRadius(Math.min(histogramWidth, histogramHeight) / 2 - 20));
+                    roomTypeTooltip.transition()
+                        .duration(200)
+                        .style("opacity", 0.9);
+                    roomTypeTooltip.html(`${d.data[0]}: ${d.data[1]} alojamientos`)
+                        .style("left", (event.pageX) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(d) {
+                    d3.select(this).transition()
+                        .duration(200)
+                        .attr("d", roomTypeArc);
+                    roomTypeTooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                });
+
+            // 3. Gráfico de grupos de vecindarios
+            const neighbourhoodGroupChartSVG = d3.select('#neighbourhood-group-chart');
+            const neighbourhoodGroupData = d3.rollups(data, v => v.length, d => d.neighbourhood_group);
+
+            const neighbourhoodGroupPie = d3.pie()
+                .value(d => d[1]);
+
+            const neighbourhoodGroupArc = d3.arc()
+                .innerRadius(0)
+                .outerRadius(Math.min(histogramWidth, histogramHeight) / 2 - 10);
+
+            const neighbourhoodGroupColor = d3.scaleOrdinal()
+                .domain(neighbourhoodGroupData.map(d => d[0]))
+                .range(d3.schemeCategory10);
+
+            const neighbourhoodGroupTooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0)
+                .style("position", "absolute")
+                .style("padding", "8px")
+                .style("border-radius", "5px")
+                .style("box-shadow", "0px 0px 5px rgba(0, 0, 0, 0.2)")
+                .style("pointer-events", "none");
+
+            const neighbourhoodGroupPieChart = neighbourhoodGroupChartSVG.append("g")
+                .attr("transform", `translate(${histogramWidth / 2},${histogramHeight / 2})`);
+
+            const neighbourhoodGroupArcs = neighbourhoodGroupPieChart.selectAll(".arc")
+                .data(neighbourhoodGroupPie(neighbourhoodGroupData))
+                .enter().append("g")
+                .attr("class", "arc");
+
+            neighbourhoodGroupArcs.append("path")
+                .attr("d", neighbourhoodGroupArc)
+                .attr("fill", d => neighbourhoodGroupColor(d.data[0]))
+                .on("mouseover", function(event, d) {
+                    d3.select(this).transition()
+                        .duration(200)
+                        .attr("d", d3.arc()
+                            .innerRadius(0)
+                            .outerRadius(Math.min(histogramWidth, histogramHeight) / 2 - 20));
+                    neighbourhoodGroupTooltip.transition()
+                        .duration(200)
+                        .style("opacity", 0.9);
+                    neighbourhoodGroupTooltip.html(`${d.data[0]}: ${d.data[1]} alojamientos`)
+                        .style("left", (event.pageX) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(d) {
+                    d3.select(this).transition()
+                        .duration(200)
+                        .attr("d", neighbourhoodGroupArc);
+                    neighbourhoodGroupTooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                });
+
+        })
+        .catch(error => {
+            console.error('Error loading the data:', error);
+        });
+
+</script>
+
+</body>
+
+</html>
+
+
+
+
+
+
+
