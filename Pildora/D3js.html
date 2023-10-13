@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Airbnb Madrid con D3.js</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        /* Estilos generales */
+        body {
+            font-family: 'Arial', sans-serif;
+            padding: 40px;
+            background-color: #FFFFFF;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1, h2 {
+            color: #484848;
+        }
+
+        h2 {
+            border-bottom: 2px solid #FF5A5F;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        /* Estilos para los gráficos */
+        .bar {
+            fill: #00A699;
+        }
+
+        .bar:hover {
+            fill: #484848;
+        }
+
+        .axis-label {
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #484848;
+        }
+
+        svg {
+            background-color: #FFFFFF;
+            border: 1px solid #EAEAEA;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            font-size: 0.9em;
+            color: #FFFFFF;
+            background-color: #767676;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.05);
+            z-index: 1000;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Análisis de comportamiento de Airbnb en Madrid</h1>
+
+    <div class="chart-container">
+        <h2>Distribución de Precios</h2>
+        <svg id="histogram" width="600" height="400" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <script>
+        // Cargar los datos
+        d3.csv("../primer_proyecto_datos/madrid_airbnb.csv").then(data => {
+
+            // 1. Histograma de precios
+            const histogramSVG = d3.select('#histogram');
+            const histogramWidth = 600;
+            const histogramHeight = 400;
+            const histogramData = d3.bin().domain([0, 500]).thresholds(50)(data.map(d => +d.price));
+            const xScaleHistogram = d3.scaleLinear().domain([0, 400]).range([0, histogramWidth - 100]);
+            const yScaleHistogram = d3.scaleLinear().domain([0, d3.max(histogramData, d => d.length)]).range([histogramHeight - 40, 0]);
+
+            const tooltipHistogram = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0)
+                .style("position", "absolute")
+                .style("padding", "8px")
+                .style("border-radius", "5px")
+                .style("box-shadow", "0px 0px 5px rgba(0, 0, 0, 0.2)")
+                .style("pointer-events", "none");
+
+            const bars = histogramSVG.selectAll('rect')
+                .data(histogramData)
+                .enter().append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => xScaleHistogram(d.x0) + 50)
+                .attr('y', d => yScaleHistogram(d.length))
+                .attr('width', d => xScaleHistogram(d.x1) - xScaleHistogram(d.x0) - 1)
+                .attr('height', d => histogramHeight - 40 - yScaleHistogram(d.length))
+                .attr('fill', 'skyblue');
+
+            bars.on("mouseover", function(event, d) {
+                    d3.select(this).attr('fill', '#484848')
+                                   .attr('x', d => xScaleHistogram(d.x0) + 50)
+                                   .attr('width', d => xScaleHistogram(d.x1) - xScaleHistogram(d.x0) - 1);
+    
+                    // Agregar el signo de pesos en la parte superior de la barra
+                    histogramSVG.append('text')
+                        .attr('class', 'dollar-sign')
+                        .attr('x', xScaleHistogram(d.x0) + 50 + (xScaleHistogram(d.x1) - xScaleHistogram(d.x0)) / 2)
+                        .attr('y', yScaleHistogram(d.length) - 5)
+                        .style('text-anchor', 'middle')
+                        .text('$');
+                        
+
+                    // Historia basada en el rango de precios
+                    let story = "";
+                    if (d.x0 <= 50) story = "En este rango de precios, es probable que encuentres habitaciones compartidas o albergues...";
+                    else if (d.x0 <= 100) story = "Alojamientos básicos pero privados...";
+                    else if (d.x0 <= 200) story = "Alojamientos de calidad media...";
+                    else if (d.x0 <= 300) story = "Alojamientos de calidad superior...";
+                    else if (d.x0 <= 400) story = "Lujo asequible...";
+                    else story = "La crema de la crema...";
+
+                    // Mostrar tooltip
+                    tooltipHistogram.style("opacity", 1);
+                    tooltipHistogram.html("Precio: " + d.x0 + " - " + d.x1 + "<br>" + "Número de listados: " + d.length + "<br><br>" + story)
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 35) + "px");
+                })
+
+                .on("mouseout", function(d) {
+                    // Restaurar color y tamaño original de la barra
+                    d3.select(this).attr('fill', '#00A699');
+                    
+                    // Ocultar tooltip
+                    tooltipHistogram.style("opacity", 0);
+
+                    // Quitar el signo de pesos cuando el mouse sale de la barra
+                    histogramSVG.selectAll('.dollar-sign').remove();
+                });
+
+            const xAxisHistogram = d3.axisBottom(xScaleHistogram).ticks(5);
+            const yAxisHistogram = d3.axisLeft(yScaleHistogram);
+
+            histogramSVG.append('g')
+                .attr('transform', `translate(50, ${histogramHeight - 40})`)
+                .call(xAxisHistogram)
+                .append('text')
+                .attr('class', 'axis-label')
+                .attr('x', histogramWidth / 2)
+                .attr('y', 30)
+                .style('text-anchor', 'middle')
+                .text('Precio');
+
+            histogramSVG.append('g')
+                .attr('transform', 'translate(50, 0)')
+                .call(yAxisHistogram)
+                .append('text')
+                .attr('class', 'axis-label')
+                .attr('transform', 'rotate(-90)')
+                .attr('x', 0 - (histogramHeight / 2))
+                .attr('y', -40)
+                .style('text-anchor', 'middle')
+                .text('Número de listados');
+        });
+    </script>
+</body>
+</html>
